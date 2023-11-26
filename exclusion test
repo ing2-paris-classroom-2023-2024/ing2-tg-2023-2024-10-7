@@ -1,0 +1,146 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+
+// Définition de la structure Node
+struct Node {
+    int vertex;
+    struct Node* next;
+};
+
+// Définition de la structure Graph
+struct Graph {
+    int numVertices;
+    struct Node** adjLists;
+};
+
+// Structure pour le degré des sommets
+struct VertexDegree {
+    int vertex;
+    int degree;
+};
+
+// Création d'un nouveau nœud
+struct Node* createNode(int v) {
+    struct Node* newNode = malloc(sizeof(struct Node));
+    newNode->vertex = v;
+    newNode->next = NULL;
+    return newNode;
+}
+
+// Création d'un graphe
+struct Graph* createGraph(int vertices) {
+    struct Graph* graph = malloc(sizeof(struct Graph));
+    graph->numVertices = vertices;
+
+    graph->adjLists = malloc(vertices * sizeof(struct Node*));
+    for (int i = 0; i < vertices; i++) {
+        graph->adjLists[i] = NULL;
+    }
+    return graph;
+}
+
+// Ajout d'une arête au graphe
+void addEdge(struct Graph* graph, int src, int dest) {
+    src--; // Ajuster pour l'indexation à partir de 0
+    dest--;
+
+    struct Node* newNode = createNode(dest);
+    newNode->next = graph->adjLists[src];
+    graph->adjLists[src] = newNode;
+
+    newNode = createNode(src);
+    newNode->next = graph->adjLists[dest];
+    graph->adjLists[dest] = newNode;
+}
+
+// Fonction pour calculer le degré de chaque sommet
+void calculateDegrees(struct Graph* graph, struct VertexDegree degrees[]) {
+    for (int i = 0; i < graph->numVertices; i++) {
+        struct Node* temp = graph->adjLists[i];
+        degrees[i].vertex = i;
+        degrees[i].degree = 0;
+        while (temp) {
+            degrees[i].degree++;
+            temp = temp->next;
+        }
+    }
+}
+
+// Fonction de comparaison pour le tri
+int compareDegrees(const void* a, const void* b) {
+    struct VertexDegree* a1 = (struct VertexDegree*)a;
+    struct VertexDegree* b1 = (struct VertexDegree*)b;
+    return b1->degree - a1->degree;
+}
+
+// Coloriage du graphe selon l'algorithme de Welsh-Powell
+void colorGraphWelshPowell(struct Graph* graph) {
+    struct VertexDegree degrees[graph->numVertices];
+    calculateDegrees(graph, degrees);
+
+    qsort(degrees, graph->numVertices, sizeof(degrees[0]), compareDegrees);
+
+    int color[graph->numVertices];
+    bool available[graph->numVertices];
+
+    for (int i = 0; i < graph->numVertices; i++) {
+        color[i] = -1;
+        available[i] = true;
+    }
+
+    for (int i = 0; i < graph->numVertices; i++) {
+        int u = degrees[i].vertex;
+
+        struct Node* temp = graph->adjLists[u];
+        while (temp) {
+            if (color[temp->vertex] != -1) {
+                available[color[temp->vertex]] = false;
+            }
+            temp = temp->next;
+        }
+
+        int cr;
+        for (cr = 0; cr < graph->numVertices; cr++) {
+            if (available[cr]) break;
+        }
+
+        color[u] = cr;
+
+        for (int j = 0; j < graph->numVertices; j++) {
+            available[j] = true;
+        }
+    }
+
+    for (int u = 0; u < graph->numVertices; u++) {
+        printf("Le sommet %d est dans la station %d\n", u + 1, color[u] + 1);
+    }
+}
+
+// Fonction principale
+int main() {
+    FILE *file = fopen("graph.txt", "r");
+    if (file == NULL) {
+        printf("Erreur à l'ouverture du fichier\n");
+        return -1;
+    }
+
+    int maxIndex = 0;
+    int src, dest;
+    while (fscanf(file, "%d %d", &src, &dest) != EOF) {
+        if (src > maxIndex) maxIndex = src;
+        if (dest > maxIndex) maxIndex = dest;
+    }
+
+    struct Graph* graph = createGraph(maxIndex + 1);
+    fseek(file, 0, SEEK_SET);
+
+    while (fscanf(file, "%d %d", &src, &dest) != EOF) {
+        addEdge(graph, src, dest);
+    }
+
+    colorGraphWelshPowell(graph);
+
+    fclose(file);
+    return 0;
+}
