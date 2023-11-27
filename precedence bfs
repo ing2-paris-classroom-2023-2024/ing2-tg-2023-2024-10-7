@@ -1,0 +1,125 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+struct Node {
+    int vertex;
+    struct Node* next;
+};
+
+struct Graph {
+    int numVertices;
+    struct Node** adjLists;
+    int* visited;
+    int* inDegree; // Ajout pour garder la trace du degré entrant de chaque sommet
+};
+
+struct Node* createNode(int v) {
+    struct Node* newNode = malloc(sizeof(struct Node));
+    newNode->vertex = v;
+    newNode->next = NULL;
+    return newNode;
+}
+
+struct Graph* createGraph(int vertices) {
+    struct Graph* graph = malloc(sizeof(struct Graph));
+    graph->numVertices = vertices;
+
+    graph->adjLists = malloc(vertices * sizeof(struct Node*));
+    graph->visited = malloc(vertices * sizeof(int));
+    graph->inDegree = calloc(vertices, sizeof(int)); // Initialisation à 0
+
+    for (int i = 0; i < vertices; i++) {
+        graph->adjLists[i] = NULL;
+        graph->visited[i] = 0;
+    }
+    return graph;
+}
+
+void addEdge(struct Graph* graph, int src, int dest) {
+    // Ajout de l'arête
+    struct Node* newNode = createNode(dest);
+    newNode->next = graph->adjLists[src];
+    graph->adjLists[src] = newNode;
+    graph->inDegree[dest]++; // Incrémenter le degré entrant du sommet de destination
+}
+
+void bfs(struct Graph* graph) {
+    int queue[graph->numVertices];
+    int front = 0, rear = 0, i;
+
+    // Ajouter tous les sommets sans prédécesseurs dans la queue pour démarrer le BFS
+    for (i = 0; i < graph->numVertices; i++) {
+        if (graph->inDegree[i] == 0) {
+            queue[rear++] = i; // Enqueue
+            graph->visited[i] = 1;
+        }
+    }
+
+    while (front < rear) {
+        int currentVertex = queue[front++]; // Dequeue
+
+        printf("Visite %d\n", currentVertex + 1);
+
+        struct Node* temp = graph->adjLists[currentVertex];
+        while (temp != NULL) {
+            int adjVertex = temp->vertex;
+
+            graph->inDegree[adjVertex]--; // Décrémenter le degré entrant du sommet adjacent
+
+            // Si le sommet adjacent n'a plus de prédécesseurs, l'ajouter dans la queue
+            if (graph->inDegree[adjVertex] == 0 && graph->visited[adjVertex] == 0) {
+                queue[rear++] = adjVertex; // Enqueue
+                graph->visited[adjVertex] = 1;
+            }
+
+            temp = temp->next;
+        }
+    }
+}
+
+int main() {
+    FILE *file = fopen("precedences.txt", "r");
+    if (file == NULL) {
+        printf("Erreur à l'ouverture du fichier\n");
+        return -1;
+    }
+
+    int numVertices = 0;
+    int src, dest;
+
+    // Première lecture pour déterminer le nombre de sommets
+    while (fscanf(file, "%d %d", &src, &dest) == 2) {
+        if (src > numVertices) numVertices = src;
+        if (dest > numVertices) numVertices = dest;
+    }
+
+    struct Graph* graph = createGraph(numVertices);
+
+    rewind(file); // Remet le curseur au début du fichier pour lire les arêtes
+
+    // Ajouter des arêtes au graphe
+    while (fscanf(file, "%d %d", &src, &dest) == 2) {
+        addEdge(graph, src - 1, dest - 1); // Ajustement pour l'indexation à partir de 0
+    }
+
+    fclose(file);
+
+    bfs(graph); // Appel de BFS modifié qui vérifie les degrés entrants
+
+    // Libération de la mémoire
+    for (int i = 0; i < graph->numVertices; i++) {
+        struct Node* temp;
+        while ((temp = graph->adjLists[i]) != NULL) {
+            graph->adjLists[i] = temp->next;
+            free(temp);
+        }
+    }
+
+    free(graph->adjLists);
+    free(graph->visited);
+    free(graph->inDegree);
+    free(graph);
+
+    return 0;
+}
