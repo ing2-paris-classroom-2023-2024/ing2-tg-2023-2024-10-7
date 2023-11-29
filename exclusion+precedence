@@ -1,0 +1,211 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdbool.h>
+
+struct Node {
+    int vertex;
+    struct Node* next;
+};
+
+struct Graph {
+    int numVertices;
+    struct Node** adjLists;
+    int* visited;
+    int* inDegree;
+    int* station;
+};
+
+struct Node* createNode(int v) {
+    struct Node* newNode = malloc(sizeof(struct Node));
+    if (!newNode) {
+        perror("Erreur d'allocation de mémoire pour un nouveau nœud");
+        exit(EXIT_FAILURE);
+    }
+    newNode->vertex = v;
+    newNode->next = NULL;
+    return newNode;
+}
+
+struct Graph* createGraph(int vertices) {
+    struct Graph* graph = malloc(sizeof(struct Graph));
+    if (!graph) {
+        perror("Erreur d'allocation de mémoire pour le graphe");
+        exit(EXIT_FAILURE);
+    }
+    graph->numVertices = vertices;
+
+    graph->adjLists = malloc(vertices * sizeof(struct Node*));
+    graph->visited = calloc(vertices, sizeof(int));
+    graph->inDegree = calloc(vertices, sizeof(int));
+    graph->station = malloc(vertices * sizeof(int));
+
+    if (!graph->adjLists || !graph->visited || !graph->inDegree || !graph->station) {
+        perror("Erreur d'allocation de mémoire pour les tableaux du graphe");
+        exit(EXIT_FAILURE);
+    }
+
+    for (int i = 0; i < vertices; i++) {
+        graph->adjLists[i] = NULL;
+        graph->station[i] = -1;
+    }
+    return graph;
+}
+
+void addEdge(struct Graph* graph, int src, int dest) {
+    src--;
+    dest--;
+
+    struct Node* newNode = createNode(dest);
+    newNode->next = graph->adjLists[src];
+    graph->adjLists[src] = newNode;
+    graph->inDegree[dest]++;
+}
+
+bool canAssignStation(struct Graph* graph, bool** exclusions, int vertex, int station) {
+    for (int i = 0; i < graph->numVertices; i++) {
+        if (graph->station[i] == station && exclusions[vertex][i]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void bfs(struct Graph* graph, bool** exclusions) {
+    int queue[graph->numVertices];
+    int front = 0, rear = 0;
+    int currentStation = 1;
+
+    for (int i = 0; i < graph->numVertices; i++) {
+        graph->visited[i] = 0;
+        graph->station[i] = -1;
+    }
+
+    for (int i = 0; i < graph->numVertices; i++) {
+        if (graph->inDegree[i] == 0) {
+            queue[rear++] = i;
+            graph->visited[i] = 1;
+            graph->station[i] = currentStation;
+        }
+    }
+
+    while (front < rear) {
+        int currentVertex = queue[front++];
+
+        if (graph->station[currentVertex] == -1) {
+            bool placed = false;
+            for (int station = 1; station <= currentStation && !placed; station++) {
+                bool canPlace = true;
+                for (int i = 0; i < graph->numVertices; i++) {
+                    if (graph->station[i] == station && exclusions[currentVertex][i]) {
+                        canPlace = false;
+                        break;
+                    }
+                }
+                if (canPlace) {
+                    graph->station[currentVertex] = station;
+                    placed = true;
+                }
+            }
+            if (!placed) {
+                currentStation++;
+                graph->station[currentVertex] = currentStation;
+            }
+        }
+
+        printf("Le sommet %d est dans la station %d\n", currentVertex + 1, graph->station[currentVertex]);
+
+        struct Node* temp = graph->adjLists[currentVertex];
+        while (temp) {
+            int adjVertex = temp->vertex;
+            graph->inDegree[adjVertex]--;
+            if (graph->inDegree[adjVertex] == 0 && !graph->visited[adjVertex]) {
+                queue[rear++] = adjVertex;
+                graph->visited[adjVertex] = 1;
+            }
+            temp = temp->next;
+        }
+    }
+}
+
+
+void readExclusions(const char* filename, bool** exclusions, int numVertices) {
+    FILE* file = fopen(filename, "r");
+    if (!file) {
+        perror("Erreur à l'ouverture du fichier d'exclusions");
+        exit(EXIT_FAILURE);
+    }
+
+    int u, v;
+    while (fscanf(file, "%d %d", &u, &v) == 2) {
+        if (u <= numVertices && v <= numVertices) {
+            exclusions[u - 1][v - 1] = true;
+            exclusions[v - 1][u - 1] = true;
+        }
+    }
+
+    fclose(file);
+}
+
+int main() {
+    FILE *file = fopen("precedences.txt", "r");
+    if (!file) {
+        perror("Erreur à l'ouverture du fichier");
+        exit(EXIT_FAILURE);
+    }
+
+    int numVertices = 0;
+    int src, dest;
+    while (fscanf(file, "%d %d", &src, &dest) == 2) {
+        if (src > numVertices) numVertices = src;
+        if (dest > numVertices) numVertices = dest;
+    }
+
+    fclose(file);
+
+    struct Graph* graph = createGraph(numVertices);
+    file = fopen("precedences.txt", "r");
+    if (!file) {
+        perror("Erreur à la réouverture du fichier");
+        exit(EXIT_FAILURE);
+    }
+
+    while (fscanf(file, "%d %d", &src, &dest) == 2) {
+        addEdge(graph, src, dest);
+    }
+
+    fclose(file);
+
+    bool** exclusions = malloc(numVertices * sizeof(bool*));
+    for (int i = 0; i < numVertices; i++) {
+        exclusions[i] = calloc(numVertices, sizeof(bool));
+        if (!exclusions[i]) {
+            perror("Erreur d'allocation de mémoire pour les exclusions");
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    readExclusions("exclusions.txt", exclusions, numVertices);
+    bfs(graph, exclusions);
+
+    for (int i = 0; i < numVertices; i++) {
+        free(exclusions[i]);
+    }
+    free(exclusions);
+
+    for (int i = 0; i < graph->numVertices; i++) {
+        struct Node* temp;
+        while ((temp = graph->adjLists[i])) {
+            graph->adjLists[i] = temp->next;
+            free(temp);
+        }
+    }
+
+    free(graph->adjLists);
+    free(graph->visited);
+    free(graph->inDegree);
+    free(graph->station);
+    free(graph);
+
+    return 0;
+}
