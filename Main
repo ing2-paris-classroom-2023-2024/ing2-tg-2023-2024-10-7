@@ -1,0 +1,122 @@
+#include "header.h"
+
+int main() {
+    // Ouverture du fichier d'exclusions et initialisation du graphe pour les exclusions
+    FILE *exclusionsFile = fopen("exclusions.txt", "r");
+    if (exclusionsFile == NULL) {
+        perror("Error opening the exclusions file");
+        return -1;
+    }
+
+    int highestIndex = 0, exclusionStart, exclusionEnd;
+    while (fscanf(exclusionsFile, "%d %d", &exclusionStart, &exclusionEnd) != EOF) {
+        if (exclusionStart > highestIndex) highestIndex = exclusionStart;
+        if (exclusionEnd > highestIndex) highestIndex = exclusionEnd;
+    }
+
+    struct Graph1* graph1 = initializeGraph1(highestIndex + 1);
+    fseek(exclusionsFile, 0, SEEK_SET);
+
+    while (fscanf(exclusionsFile, "%d %d", &exclusionStart, &exclusionEnd) != EOF) {
+        createEdge1(graph1, exclusionStart, exclusionEnd);
+    }
+
+    fclose(exclusionsFile);
+
+    applyWelshPowellColoring1(graph1);
+    releaseGraphMemory1(graph1);
+
+    // Ouverture du fichier de précédences pour la première utilisation
+    FILE *precedencesFile = fopen("precedences.txt", "r");
+    if (!precedencesFile) {
+        perror("Error opening task precedence file");
+        exit(EXIT_FAILURE);
+    }
+
+    int taskCount = 0, taskStart, taskEnd;
+    while (fscanf(precedencesFile, "%d %d", &taskStart, &taskEnd) == 2) {
+        if (taskStart > taskCount) taskCount = taskStart;
+        if (taskEnd > taskCount) taskCount = taskEnd;
+    }
+    fclose(precedencesFile);
+
+    double maxCycleDuration = getMaximumCycleTime("cycle.txt");
+    struct TaskGraph* taskGraph = initiateTaskGraph(taskCount, maxCycleDuration);
+
+    // Réouverture du fichier de précédences pour la deuxième utilisation
+    precedencesFile = fopen("precedences.txt", "r");
+    if (!precedencesFile) {
+        perror("Error reopening task precedence file");
+        exit(EXIT_FAILURE);
+    }
+    while (fscanf(precedencesFile, "%d %d", &taskStart, &taskEnd) == 2) {
+        linkTasks(taskGraph, taskStart, taskEnd);
+    }
+    fclose(precedencesFile);
+
+    loadTaskDurations("operations.txt", taskGraph->taskTimes, taskCount);
+
+    traverseGraph(taskGraph);
+
+    // Nettoyage pour taskGraph
+    for (int i = 0; i < taskGraph->totalTasks; i++) {
+        struct TaskNode* temp;
+        while ((temp = taskGraph->adjacencyLists[i])) {
+            taskGraph->adjacencyLists[i] = temp->nextTask;
+            free(temp);
+        }
+    }
+
+    free(taskGraph->adjacencyLists);
+    free(taskGraph->taskVisited);
+    free(taskGraph->taskInDegree);
+    free(taskGraph->taskStation);
+    free(taskGraph->taskTimes);
+    free(taskGraph);
+
+    // Deuxième segment de code
+    precedencesFile = fopen("precedences.txt", "r");
+    if (!precedencesFile) {
+        perror("Erreur à l'ouverture du fichier de précédences");
+        exit(EXIT_FAILURE);
+    }
+
+    int numVertices = 0, src, dest;
+    while (fscanf(precedencesFile, "%d %d", &src, &dest) == 2) {
+        if (src > numVertices) numVertices = src;
+        if (dest > numVertices) numVertices = dest;
+    }
+    fclose(precedencesFile);
+
+    double maxCycleTime = readCycleTime("cycle.txt");
+    struct Graph* graph = createGraph(numVertices, maxCycleTime);
+
+    precedencesFile = fopen("precedences.txt", "r");
+    if (!precedencesFile) {
+        perror("Erreur à la réouverture du fichier de précédences");
+        exit(EXIT_FAILURE);
+    }
+    while (fscanf(precedencesFile, "%d %d", &src, &dest) == 2) {
+        addEdge(graph, src, dest);
+    }
+    fclose(precedencesFile);
+
+    readOperations("operations.txt", graph->operationTime, numVertices);
+
+    bool** exclusions = malloc(numVertices * sizeof(bool*));
+    for (int i = 0; i < numVertices; i++) {
+        exclusions[i] = calloc(numVertices, sizeof(bool));
+        if (!exclusions[i]) {
+            perror("Erreur d'allocation de mémoire pour les exclusions");
+            exit(EXIT_FAILURE);
+        }
+    }
+    readExclusions("exclusions.txt", exclusions, numVertices);
+
+    bfs(graph, exclusions);
+
+    freeGraph(graph);
+    freeExclusions(exclusions, numVertices);
+
+    return 0;
+}
