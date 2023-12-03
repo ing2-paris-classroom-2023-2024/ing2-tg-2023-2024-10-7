@@ -1,0 +1,149 @@
+#include "header.h"
+
+struct TaskNode* initiateTaskNode(int id) {
+    struct TaskNode* newNode = malloc(sizeof(struct TaskNode));
+    if (!newNode) {
+        perror("Error allocating memory for a new task node");
+        exit(EXIT_FAILURE);
+    }
+    newNode->taskID = id;
+    newNode->nextTask = NULL;
+    return newNode;
+}
+
+struct TaskGraph* initiateTaskGraph(int numberOfTasks, double maxCycleTime) {
+    struct TaskGraph* graph = malloc(sizeof(struct TaskGraph));
+    if (!graph) {
+        perror("Error allocating memory for the task graph");
+        exit(EXIT_FAILURE);
+    }
+    graph->totalTasks = numberOfTasks;
+    graph->maxTimePerCycle = maxCycleTime;
+
+    graph->adjacencyLists = malloc(numberOfTasks * sizeof(struct TaskNode*));
+    graph->taskVisited = calloc(numberOfTasks, sizeof(int));
+    graph->taskInDegree = calloc(numberOfTasks, sizeof(int));
+    graph->taskStation = malloc(numberOfTasks * sizeof(int));
+    graph->taskTimes = calloc(numberOfTasks, sizeof(double));
+
+    for (int i = 0; i < numberOfTasks; i++) {
+        graph->adjacencyLists[i] = NULL;
+        graph->taskStation[i] = -1;
+    }
+    return graph;
+}
+
+void linkTasks(struct TaskGraph* graph, int startTask, int endTask) {
+    startTask--;
+    endTask--;
+
+    struct TaskNode* newNode = initiateTaskNode(endTask);
+    newNode->nextTask = graph->adjacencyLists[startTask];
+    graph->adjacencyLists[startTask] = newNode;
+    graph->taskInDegree[endTask]++;
+}
+
+bool isTaskAssignable(struct TaskGraph* graph, int task, int station, double* stationDurations) {
+    return stationDurations[station] + graph->taskTimes[task] <= graph->maxTimePerCycle;
+}
+
+void traverseGraph(struct TaskGraph* graph) {
+    int taskQueue[graph->totalTasks];
+    int front = 0, rear = 0;
+    int currentStation = 1;
+    double stationDurations[graph->totalTasks + 1];
+    memset(stationDurations, 0, sizeof(stationDurations));
+
+    for (int i = 0; i < graph->totalTasks; i++) {
+        graph->taskVisited[i] = 0;
+        graph->taskStation[i] = -1;
+    }
+
+    for (int i = 0; i < graph->totalTasks; i++) {
+        if (graph->taskInDegree[i] == 0) {
+            taskQueue[rear++] = i;
+            graph->taskVisited[i] = 1;
+            graph->taskStation[i] = currentStation;
+            stationDurations[currentStation] += graph->taskTimes[i];
+        }
+    }
+
+    while (front < rear) {
+        int currentTask = taskQueue[front++];
+
+        struct TaskNode* temp = graph->adjacencyLists[currentTask];
+        while (temp) {
+            int adjTask = temp->taskID;
+            graph->taskInDegree[adjTask]--;
+            if (graph->taskInDegree[adjTask] == 0 && !graph->taskVisited[adjTask]) {
+                taskQueue[rear++] = adjTask;
+                graph->taskVisited[adjTask] = 1;
+                bool placed = false;
+                for (int station = 1; station <= currentStation && !placed; station++) {
+                    if (isTaskAssignable(graph, adjTask, station, stationDurations)) {
+                        graph->taskStation[adjTask] = station;
+                        stationDurations[station] += graph->taskTimes[adjTask];
+                        placed = true;
+                    }
+                }
+                if (!placed) {
+                    currentStation++;
+                    graph->taskStation[adjTask] = currentStation;
+                    stationDurations[currentStation] += graph->taskTimes[adjTask];
+                }
+            }
+            temp = temp->nextTask;
+        }
+    }
+
+    // Modification pour l'affichage des stations
+    printf("Precedence et Cycle :\n");
+    int stationTasks[graph->totalTasks + 1][graph->totalTasks];
+    int stationTaskCounts[graph->totalTasks + 1];
+    memset(stationTaskCounts, 0, sizeof(stationTaskCounts));
+
+    for (int i = 0; i < graph->totalTasks; i++) {
+        int station = graph->taskStation[i];
+        stationTasks[station][stationTaskCounts[station]++] = i + 1;
+    }
+
+    for (int i = 1; i <= currentStation; i++) {
+        printf("Station %d : ", i);
+        for (int j = 0; j < stationTaskCounts[i]; j++) {
+            printf("%d ", stationTasks[i][j]);
+        }
+        printf("\n");
+    }
+
+    printf("Nombre total de stations utilisees : %d\n\n", currentStation);
+}
+
+void loadTaskDurations(const char* file, double* durations, int count) {
+    FILE* durationFile = fopen(file, "r");
+    if (!durationFile) {
+        perror("Error opening task duration file");
+        exit(EXIT_FAILURE);
+    }
+
+    int task;
+    double duration;
+    while (fscanf(durationFile, "%d %lf", &task, &duration) == 2) {
+        if (task <= count) {
+            durations[task - 1] = duration;
+        }
+    }
+
+    fclose(durationFile);
+}
+
+double getMaximumCycleTime(const char* file) {
+    FILE* cycleTimeFile = fopen(file, "r");
+    double cycleTime;
+    if (!cycleTimeFile || fscanf(cycleTimeFile, "%lf", &cycleTime) != 1) {
+        perror("Error opening maximum cycle time file");
+        exit(EXIT_FAILURE);
+    }
+
+    fclose(cycleTimeFile);
+    return cycleTime;
+}
