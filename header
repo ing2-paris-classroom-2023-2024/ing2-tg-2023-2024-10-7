@@ -1,0 +1,76 @@
+#ifndef TESTASSEMBLAGE_HEADER_H
+#define TESTASSEMBLAGE_HEADER_H
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdbool.h>
+
+struct GraphNode {
+    int nodeIndex;
+    struct GraphNode* nextNode;
+};
+
+struct Graph1 {
+    int totalNodes;
+    struct GraphNode** adjacencyList;
+};
+
+struct NodeDegree {
+    int node;
+    int degree;
+};
+
+struct Graph1* initializeGraph1(int totalNodes);
+void createEdge1(struct Graph1* graph, int startNode, int endNode);
+void applyWelshPowellColoring1(struct Graph1* graph);
+void releaseGraphMemory1(struct Graph1* graph);
+
+struct TaskNode {
+    int taskID;
+    struct TaskNode* nextTask;
+};
+
+struct TaskGraph {
+    int totalTasks;
+    struct TaskNode** adjacencyLists;
+    int* taskVisited;
+    int* taskInDegree;
+    int* taskStation;
+    double* taskTimes;
+    double maxTimePerCycle;
+};
+
+struct TaskNode* initiateTaskNode(int id);
+struct TaskGraph* initiateTaskGraph(int numberOfTasks, double maxCycleTime);
+void linkTasks(struct TaskGraph* graph, int startTask, int endTask);
+bool isTaskAssignable(struct TaskGraph* graph, int task, int station, double* stationDurations);
+void traverseGraph(struct TaskGraph* graph);
+void loadTaskDurations(const char* file, double* durations, int count);
+double getMaximumCycleTime(const char* file);
+
+struct Node {
+    int vertex;
+    struct Node* next;
+};
+
+struct Graph {
+    int numVertices;
+    struct Node** adjLists;
+    int* visited;
+    int* inDegree;
+    int* station;
+    double* operationTime;
+    double maxCycleTime;
+};
+
+struct Graph* createGraph(int vertices, double maxCycleTime);
+void addEdge(struct Graph* graph, int src, int dest);
+void bfs(struct Graph* graph, bool** exclusions);
+void readExclusions(const char* filename, bool** exclusions, int numVertices);
+void readOperations(const char* filename, double* operations, int numVertices);
+double readCycleTime(const char* filename);
+void freeGraph(struct Graph* graph);
+void freeExclusions(bool** exclusions, int numVertices);
+
+#endif //TESTASSEMBLAGE_HEADER_H
